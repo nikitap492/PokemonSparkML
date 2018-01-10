@@ -14,8 +14,9 @@ object SparkPokemonMLExample {
   val maxDepth = 5
   val seed = 42
   val tol = 1e-6
-  val gbIters = 100
+  val gbIters = 30
   val lrIters = 200
+  val treesNum = 20
 
   def main(args: Array[String]): Unit = {
 
@@ -50,8 +51,11 @@ object SparkPokemonMLExample {
     val gbRoc = evaluate(train, test, gb())
     val lrRoc = evaluate(train, test, lr())
     val dtcRoc = evaluate(train, test, dtc())
+    val rfRoc = evaluate(train, test, rf())
+    val nbRoc = evaluate(train, test, new NaiveBayes())
 
-    println(s"Accuracy:\nDecisionTreeClassifier\t$dtcRoc\nLogisticRegression\t$lrRoc\nGradientBoosting\t$gbRoc")
+    println(s"Accuracy:\nDecisionTreeClassifier\t$dtcRoc\nLogisticRegression\t$lrRoc" +
+      s"\nGradientBoosting\t$gbRoc\nRandomForestClassifier\t$rfRoc\nNaiveBayes\t$nbRoc")
 
 
   }
@@ -108,6 +112,13 @@ object SparkPokemonMLExample {
     new GBTClassifier().setMaxIter(gbIters)
   }
 
+
+  /**
+    * @return  RandomForestClassifier with default params
+    */
+  def rf(): RandomForestClassifier = {
+    new RandomForestClassifier().setNumTrees(treesNum)
+  }
 
   case class Pokemon(id: Long, legendary: Boolean, name: String, primaryType: String, secondaryType: String, hp: Double, attack: Double,
                      defense: Double, attackSpeed: Double, attackDefense: Double, speed: Double, generation: Double)

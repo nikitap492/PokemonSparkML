@@ -22,13 +22,12 @@ object SparkPokemonMLExample {
 
     val session = SparkSession.builder()
       .appName("Pokemons")
-      .master("local[4]")
       .getOrCreate()
 
 
     import session.implicits._
 
-    val pokemons = session.sparkContext.textFile("./pokemon.csv")
+    val pokemons = session.sparkContext.textFile(args(0))
       .map(_.toUpperCase)
       .map(_.split(","))
       .map(parser)

@@ -1,30 +1,20 @@
 package example
 
-import scala.math.random
-import org.apache.spark._
 import org.apache.spark.ml.Pipeline
-import org.apache.spark.ml.feature.{OneHotEncoder, StringIndexer}
-import org.apache.spark.sql.{SQLContext, SparkSession}
-
-import scala.io.Source
+import org.apache.spark.ml.classification.DecisionTreeClassifier
+import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator
+import org.apache.spark.ml.feature.{LabeledPoint, StringIndexer}
+import org.apache.spark.ml.linalg.Vectors
+import org.apache.spark.sql.SparkSession
 
 object SparkPokemonMLExample {
 
-  def main(args: Array[String]) {
-    //    val conf = new SparkConf().setAppName()
-    //    val sc = new SparkContext(conf)
-    //    val sqlContext = new SQLContext(sc)
+  def main(args: Array[String]): Unit = {
 
     val session = SparkSession.builder()
-      .appName("Spark Sql example")
+      .appName("Pokemons")
       .master("local[4]")
       .getOrCreate()
-
-    //working_dir
-    //val dir = args(0)
-
-    //    val pokemons = Source.fromFile().mkString
-    //    val combats = Source.fromFile(dir + "/combats.csv").mkString
 
 
     import session.implicits._
@@ -37,33 +27,47 @@ object SparkPokemonMLExample {
 
     pokemons.createTempView("pokemons")
 
-    val s = session.sqlContext.sql("SELECT * FROM pokemons").groupBy("legendary").count()
 
-    val indexedDf =  new Pipeline()
-      .setStages(Array("primaryType", "secondaryType")
-        .map(columnName => new StringIndexer()
-          .setInputCol(columnName)
-          .setOutputCol(s"${columnName}Index"))
-      ).fit(pokemons).transform(pokemons)
+    val indexed = new Pipeline().setStages(Array("primaryType", "secondaryType")
+      .map(columnName => new StringIndexer()
+        .setInputCol(columnName)
+        .setOutputCol(s"${columnName}Index")))
+      .fit(pokemons)
+      .transform(pokemons)
 
-    val oneHotEncodedDf = new Pipeline().setStages(
-      indexedDf.columns.filter(_ contains "Index")
-      .map(index => new OneHotEncoder()
-        .setInputCol(index)
-        .setOutputCol(s"${index}Vec"))
-    ).fit(indexedDf).transform(indexedDf)
+    val data = indexed.map(p => LabeledPoint(binaryMapper(p.getBoolean(1)),
+      Vectors.dense(List.range(5, 14).map(p.getDouble).toArray)))
 
+    val Array(train, test) = data.randomSplit(Array(0.8, 0.2), 42)
+
+    val model = new DecisionTreeClassifier()
+      .setLabelCol("label")
+      .setFeaturesCol("features")
+      .fit(train)
+
+    val predictions = model.transform(test)
+
+
+    val evaluator = new BinaryClassificationEvaluator()
+      .setLabelCol("label")
+      .setRawPredictionCol("prediction")
+
+    val accuracy = evaluator.evaluate(predictions)
+    println("Test Error = " + (1.0 - accuracy))
 
   }
 
 
-  case class Pokemon(id: Long, name: String, primaryType: String, secondaryType: String, hp: Int, attack: Int,
-                     defense: Int, attackSpeed: Int, attackDefense: Int, speed: Int, generation: Int, legendary: Boolean)
-
+  case class Pokemon(id: Long, legendary: Boolean, name: String, primaryType: String, secondaryType: String, hp: Double, attack: Double,
+                     defense: Double, attackSpeed: Double, attackDefense: Double, speed: Double, generation: Double)
 
   def mapper(p: Array[String]): Pokemon = {
-    Pokemon(p(0).trim.toLong, p(1), p(2), if (p(3) == "") "NONE" else p(3), p(4).toInt, p(5).toInt, p(6).toInt,
-      p(7).toInt, p(8).toInt, p(9).toInt, p(10).toInt, p(11).trim.toBoolean)
+    Pokemon(p(0).trim.toLong, p(11).trim.toBoolean,  p(1), p(2), if (p(3) == "") "NONE" else p(3), p(4).toDouble, p(5).toDouble, p(6).toDouble,
+      p(7).toDouble, p(8).toDouble, p(9).toDouble, p(10).toDouble)
+  }
+
+  def binaryMapper(flag: Boolean): Double = {
+    if (flag) 1.0 else 0.0
   }
 
 }
